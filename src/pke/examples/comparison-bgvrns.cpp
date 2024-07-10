@@ -45,7 +45,7 @@ Ciphertext<DCRTPoly> InnerEvalPolyPS(ConstCiphertext<DCRTPoly> x,
 Ciphertext<DCRTPoly> EvalPolyPS(ConstCiphertext<DCRTPoly> x, const std::vector<int64_t>& coefficients, const size_t& numslots);
 
 
-Ciphertext<DCRTPoly> EvalComp(ConstCiphertext<DCRTPoly> x, ConstCiphertext<DCRTPoly> y);
+Ciphertext<DCRTPoly> EvalComp(ConstCiphertext<DCRTPoly> x, ConstCiphertext<DCRTPoly> y, const size_t& numslots);
 
 
 int main(int argc, char* argv[]) {
@@ -68,8 +68,8 @@ int main(int argc, char* argv[]) {
     CCParams<CryptoContextBGVRNS> parameters;
     parameters.SetRingDim(128);
     parameters.SetSecurityLevel(HEStd_NotSet);
-    parameters.SetMultiplicativeDepth(5);
-    parameters.SetPlaintextModulus(536903681);
+    parameters.SetMultiplicativeDepth(20);
+    parameters.SetPlaintextModulus(257);  // 536903681
     parameters.SetMaxRelinSkDeg(3);
 
     CryptoContext<DCRTPoly> cryptoContext = GenCryptoContext(parameters);
@@ -127,7 +127,7 @@ int main(int argc, char* argv[]) {
     std::vector<int64_t> vectorOfInts1 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
     Plaintext plaintext1               = cryptoContext->MakePackedPlaintext(vectorOfInts1);
 
-    std::vector<int64_t> vectorOfInts2 = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+    std::vector<int64_t> vectorOfInts2 = {1, 8, 3, 5, 10, 14, 30, 0, 4, 15, 17, 10};
     Plaintext plaintext2               = cryptoContext->MakePackedPlaintext(vectorOfInts2);
 
     std::cout << "\nOriginal Plaintext #1: \n";
@@ -157,13 +157,38 @@ int main(int argc, char* argv[]) {
     std::cout << "\nAverage encryption time: " << processingTime / 7 << "ms" << std::endl;
 
     
+    ////////////////////////////////////////////////////////////
+    // Homomorphic Polynomial Evaluation
+    ////////////////////////////////////////////////////////////
+
+    std::cout << "\nRunning homomorphic poylnomial evaluation based on the Paterson-Stockmeyer algorithm...";
+
     std::vector<int64_t> coefficient = {1, 3, 5, 8, 10};
     auto ciphertextPolyEval = EvalPolyPS(ciphertexts[0], coefficient, numslots);  
+
+     std::cout << "Completed\n";
+
     Plaintext plaintextPolyEval;
     cryptoContext->Decrypt(keyPair.secretKey, ciphertextPolyEval, &plaintextPolyEval);
     plaintextPolyEval->SetLength(plaintext1->GetLength());
     std::cout << "\nResult of homomorphic polynomial evaluation: \n";
     std::cout << plaintextPolyEval << std::endl;  
+
+    ////////////////////////////////////////////////////////////
+    // Homomorphic Comparison
+    ////////////////////////////////////////////////////////////
+
+    std::cout << "\nRunning homomorphic comparison ...";
+
+    auto ciphertextComp = EvalComp(ciphertexts[0], ciphertexts[1], numslots);  
+
+     std::cout << "Completed\n";
+     
+    Plaintext plaintextComp;
+    cryptoContext->Decrypt(keyPair.secretKey, ciphertextComp, &plaintextComp);
+    plaintextComp->SetLength(plaintext1->GetLength());
+    std::cout << "\nResult of homomorphic comparison: \n";
+    std::cout << plaintextComp << std::endl;  
 
 
     return 0;
@@ -186,15 +211,14 @@ uint32_t Degree(const std::vector<int64_t>& coefficients) {
 }
 
 std::shared_ptr<longDivMod> LongDivisionPoly(const std::vector<int64_t>& f, const std::vector<int64_t>& g, const NativeInteger& p) {
-    std::cout << "Hi! at line " << __LINE__ << std::endl;
-    for (size_t i = 0; i < f.size(); i++){
-        std::cout << f[i] << ", ";
-    }
-    std::cout << std::endl;
-    for (size_t i = 0; i < g.size(); i++){
-        std::cout << g[i] << ", ";
-    }
-    std::cout << std::endl;
+    // for (size_t i = 0; i < f.size(); i++){
+    //     std::cout << f[i] << ", ";
+    // }
+    // std::cout << std::endl;
+    // for (size_t i = 0; i < g.size(); i++){
+    //     std::cout << g[i] << ", ";
+    // }
+    // std::cout << std::endl;
 
     uint32_t n = Degree(f);
     uint32_t k = Degree(g);
@@ -216,9 +240,6 @@ std::shared_ptr<longDivMod> LongDivisionPoly(const std::vector<int64_t>& f, cons
     d.reserve(g.size() + n);
 
     while (int32_t(n - k) >= 0) {
-        if (n != 0)
-            std::cout << "n = " << n << ", k = " << k <<" at line " << __LINE__ << std::endl;
-
         // d is g padded with zeros before up to n
         d.clear();
         d.resize(n - k);
@@ -256,34 +277,27 @@ std::shared_ptr<longDivMod> LongDivisionPoly(const std::vector<int64_t>& f, cons
         if(n == 0 && k == 0 && r[0] == 0)
             break;
     }
-    std::cout << "Hi! at line " << __LINE__ << std::endl;
-    for (size_t i = 0; i < q.size(); i++){
-        std::cout << q[i] << ", ";
-    }
-    std::cout << std::endl;
-    for (size_t i = 0; i < r.size(); i++){
-        std::cout << r[i] << ", ";
-    }
-    std::cout << std::endl;
+    // for (size_t i = 0; i < q.size(); i++){
+    //     std::cout << q[i] << ", ";
+    // }
+    // std::cout << std::endl;
+    // for (size_t i = 0; i < r.size(); i++){
+    //     std::cout << r[i] << ", ";
+    // }
+    // std::cout << std::endl;
     return std::make_shared<longDivMod>(q, r);
 }
 
 Ciphertext<DCRTPoly> EvalLinearWSumMutable(std::vector<Ciphertext<DCRTPoly>>& ciphertexts,
                                                                const std::vector<int64_t>& constants, const size_t& numslots) {
+   
     const auto cryptoParams = std::dynamic_pointer_cast<CryptoParametersBGVRNS>(ciphertexts[0]->GetCryptoParameters());
-
     auto cc   = ciphertexts[0]->GetCryptoContext();
     auto algo = cc->GetScheme();
 
-    std::cout << "Hi at line " << __LINE__ << std::endl;
-
-    std::cout << "cryptoParams->GetScalingTechnique() = "<< cryptoParams->GetScalingTechnique() << " at line " << __LINE__ << std::endl;
- 
     if (cryptoParams->GetScalingTechnique() != FIXEDMANUAL) {
         // Check to see if input ciphertexts are of same level
         // and adjust if needed to the max level among them
-
-        std::cout << "Hi at line " << __LINE__ << std::endl;
 
         uint32_t maxLevel = ciphertexts[0]->GetLevel();
         uint32_t maxIdx   = 0;
@@ -294,8 +308,6 @@ Ciphertext<DCRTPoly> EvalLinearWSumMutable(std::vector<Ciphertext<DCRTPoly>>& ci
                 maxIdx   = i;
             }
         }
-        
-        std::cout << "Hi at line " << __LINE__ << std::endl;
 
         for (uint32_t i = 0; i < maxIdx; i++) {
             algo->AdjustLevelsAndDepthInPlace(ciphertexts[i], ciphertexts[maxIdx]);
@@ -312,14 +324,12 @@ Ciphertext<DCRTPoly> EvalLinearWSumMutable(std::vector<Ciphertext<DCRTPoly>>& ci
         }
     }
 
-    std::cout << "Hi at line " << __LINE__ << std::endl;
     // Duhyeong: Cannot find ctxt-const mult API for BGV...
     std::vector<int64_t> vec(numslots, constants[0]);
     Plaintext pt;
     pt = cc->MakePackedPlaintext(vec); 
     Ciphertext<DCRTPoly> weightedSum = cc->EvalMult(ciphertexts[0], pt);
 
-    std::cout << "Hi at line " << __LINE__ << std::endl;
     Ciphertext<DCRTPoly> tmp;
     for (uint32_t i = 1; i < ciphertexts.size(); i++) {
         // Duhyeong: Cannot find ctxt-const mult API for BGV...
@@ -329,7 +339,6 @@ Ciphertext<DCRTPoly> EvalLinearWSumMutable(std::vector<Ciphertext<DCRTPoly>>& ci
         tmp = cc->EvalMult(ciphertexts[i], pti);
         cc->EvalAddInPlace(weightedSum, tmp);
     }
-    std::cout << "Hi at line " << __LINE__ << std::endl;
 
     cc->ModReduceInPlace(weightedSum);
 
@@ -626,7 +635,6 @@ Ciphertext<DCRTPoly> EvalPolyPS(ConstCiphertext<DCRTPoly> x, const std::vector<i
     // Divide f2 by x^{k*2^{m-1}}
     std::vector<int64_t> xkm(int32_t(k2m2k + k) + 1, 0);
     xkm.back() = 1;
-    std::cout << "hi! at Line " << __LINE__ << std::endl;
     auto divqr = LongDivisionPoly(f2, xkm, p);
 
     // Subtract x^{k(2^{m-1} - 1)} from r
@@ -644,9 +652,7 @@ Ciphertext<DCRTPoly> EvalPolyPS(ConstCiphertext<DCRTPoly> x, const std::vector<i
     }
 
     // Divide r2 by q
-    std::cout << "hi! at Line " << __LINE__ << std::endl;
     auto divcs = LongDivisionPoly(r2, divqr->q, p);
-    std::cout << "hi! at Line " << __LINE__ << std::endl;
 
     // Add x^{k(2^{m-1} - 1)} to s
     std::vector<int64_t> s2 = divcs->r;
@@ -698,9 +704,7 @@ Ciphertext<DCRTPoly> EvalPolyPS(ConstCiphertext<DCRTPoly> x, const std::vector<i
     Ciphertext<DCRTPoly> qu;
 
     if (Degree(divqr->q) > k) {
-        std::cout << "hi! at Line " << __LINE__ << std::endl;
         qu = InnerEvalPolyPS(x, divqr->q, k, m - 1, powers, powers2, numslots);
-        std::cout << "hi! at Line " << __LINE__ << std::endl;
     }
     else {
         // dq = k from construction
@@ -715,9 +719,7 @@ Ciphertext<DCRTPoly> EvalPolyPS(ConstCiphertext<DCRTPoly> x, const std::vector<i
                 ctxs[i]    = powers[i];
                 weights[i] = divqr->q[i + 1];
             }
-            std::cout << "hi! at Line " << __LINE__ << std::endl;
             qu = EvalLinearWSumMutable(ctxs, weights, numslots);
-            std::cout << "hi! at Line " << __LINE__ << std::endl;
             // the highest order term will always be 1 because q is monic
             cc->EvalAddInPlace(qu, powers[k - 1]);
         }
@@ -740,9 +742,7 @@ Ciphertext<DCRTPoly> EvalPolyPS(ConstCiphertext<DCRTPoly> x, const std::vector<i
     }
     else {
         if (ds > k) {
-            std::cout << "hi! at Line " << __LINE__ << std::endl;
             su = InnerEvalPolyPS(x, s2, k, m - 1, powers, powers2, numslots);
-            std::cout << "hi! at Line " << __LINE__ << std::endl;
         }
         else {
             // ds = k from construction
@@ -757,9 +757,7 @@ Ciphertext<DCRTPoly> EvalPolyPS(ConstCiphertext<DCRTPoly> x, const std::vector<i
                     ctxs[i]    = powers[i];
                     weights[i] = s2[i + 1];
                 }
-                std::cout << "hi! at Line " << __LINE__ << std::endl;
                 su = EvalLinearWSumMutable(ctxs, weights, numslots);
-                std::cout << "hi! at Line " << __LINE__ << std::endl;
                 // the highest order term will always be 1 because q is monic
                 cc->EvalAddInPlace(su, powers[k - 1]);
             }
@@ -792,6 +790,66 @@ Ciphertext<DCRTPoly> EvalPolyPS(ConstCiphertext<DCRTPoly> x, const std::vector<i
     cc->ModReduceInPlace(result);
     cc->EvalAddInPlace(result, su);
     cc->EvalSubInPlace(result, power2km1);
+
+    return result;
+}
+
+
+// int64_t powerMod(int64_t& a, int64_t& power, int64_t& p) {
+//     int64_t result = 1;
+//     int64_t tmp = power;
+//     int64_t a_power = a;
+//     while(tmp > 0)
+//     {
+//         if (tmp & 1)
+//             result = (result * a_power) % p;
+//         a_power = (a_power * a_power) % p;
+//         tmp >>= 1;
+//     }
+
+//     return result;
+// }
+
+// Duhyeong: Refer to eprint 2021/315 (Eq. 5 in Section 3.2)
+// "Less-than" function
+Ciphertext<DCRTPoly> EvalComp(ConstCiphertext<DCRTPoly> x, ConstCiphertext<DCRTPoly> y, const size_t& numslots) {
+    // Compute the coefficients of the polynomial corresponding to the sign function modulo p   
+    auto cc = x->GetCryptoContext();
+    auto p = cc->GetCryptoParameters()->GetPlaintextModulus();
+    uint64_t p_half = (p - 1) / 2;
+    std::vector<int64_t> coefficients(p, 0);
+    std::vector<int64_t> powList(p_half, 1);
+    std::vector<int64_t> sqList(p_half, 1);
+    coefficients[p - 1] = (p + 1) / 2;
+
+    for(uint64_t a = 0; a < p_half; a++){
+        sqList[a] = ((a+1)*(a+1)) % p;
+    }
+    for (uint64_t i = p - 2; i > 0; i--){
+        if(i == p - 2){
+            for(uint64_t a = 0; a < p_half; a++){
+                powList[a] = a + 1;
+            }
+            for(uint64_t a = 0; a < p_half; a++){
+                coefficients[i] = (coefficients[i] + powList[a]) % p;
+            }
+        }
+        else if(i % 2 != 0){
+            for(uint64_t a = 0; a < p_half; a++){
+                powList[a] = (powList[a] * sqList[a]) % p;
+            }
+            for(uint64_t a = 0; a < p_half; a++){
+                coefficients[i] = (coefficients[i] + powList[a]) % p;
+            }
+        }
+    }
+    std::cout << "Comparison Coefficient Gen done  ... ";
+
+    auto diff = cc->EvalSub(x, y);
+
+    Ciphertext<DCRTPoly> result;
+
+    result = EvalPolyPS(diff, coefficients, numslots);
 
     return result;
 }
