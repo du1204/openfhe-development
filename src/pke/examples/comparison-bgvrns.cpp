@@ -66,11 +66,12 @@ int main(int argc, char* argv[]) {
     // ciphertexts, i.e., ceiling{log2{7}} Max depth is set to 3 (second 3) to
     // generate homomorphic evaluation multiplication keys for s^2 and s^3
     CCParams<CryptoContextBGVRNS> parameters;
-    parameters.SetRingDim(128);
-    parameters.SetSecurityLevel(HEStd_NotSet);
-    parameters.SetMultiplicativeDepth(20);
-    parameters.SetPlaintextModulus(257);  // 536903681
+    // parameters.SetRingDim(32768);
+    // parameters.SetSecurityLevel(HEStd_NotSet);
+    parameters.SetMultiplicativeDepth(17);
+    parameters.SetPlaintextModulus(65537);  // 786433, 536903681
     parameters.SetMaxRelinSkDeg(3);
+    parameters.SetNumLargeDigits(5);
 
     CryptoContext<DCRTPoly> cryptoContext = GenCryptoContext(parameters);
     // enable features that you wish to use
@@ -152,7 +153,9 @@ int main(int argc, char* argv[]) {
 
     processingTime = TOC(t);
 
-    std::cout << "Completed\n";
+    std::cout << "At level = " << ciphertexts[0]->GetLevel();
+
+    std::cout << "... Completed\n";
 
     std::cout << "\nAverage encryption time: " << processingTime / 7 << "ms" << std::endl;
 
@@ -189,6 +192,7 @@ int main(int argc, char* argv[]) {
     plaintextComp->SetLength(plaintext1->GetLength());
     std::cout << "\nResult of homomorphic comparison: \n";
     std::cout << plaintextComp << std::endl;  
+    std::cout << "At level = " << ciphertextComp->GetLevel() << std::endl;
 
 
     return 0;
